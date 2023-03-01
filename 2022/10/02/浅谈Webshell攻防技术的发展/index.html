@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+
+
+
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+  <meta name="author" content="John Doe">
+
+
+
+
+
+<title>浅谈Webshell攻防技术的发展 | Hexo</title>
+
+
+
+    <link rel="icon" href="/favicon.png">
+
+
+
+<link rel="stylesheet" href="/css/style.css">
+
+
+<link rel="stylesheet" href="/lib/tocbot/tocbot.css">
+
+
+<link rel="stylesheet" href="/lib/fancybox/fancybox.min.css">
+
+
+
+
+
+
+<meta name="generator" content="Hexo 6.2.0"></head>
+<body>
+  <div id="app">
+    <header class="header">
+  <a href="/" class="logo" focusable="false">
+    <img src="/images/logo.svg" alt="Hexo" />
+  </a>
+  <nav class="nav">
+    <div class="spacer"></div>
+    <div class="right">
+      <div class="menu">
+        
+          <a class="item" href="/">Home</a>
+          
+          <a class="item" href="/categories">Categories</a>
+          
+          <a class="item" href="/tags">Tags</a>
+          
+      </div>
+      <div class="links">
+        
+          
+            <a title="Github" target="_blank" rel="noopener" href="https://github.com/mapleaves9" class="link-item">
+              <span class="iconify" data-icon="ri:github-line"></span>
+            </a>
+          
+        
+      </div>
+      <a class="toggleDark" id="dark-mode">
+        <span class="iconify" data-icon="ri:sun-line" id="sun-icon" style="display: none"></span>
+        <span class="iconify" data-icon="ri:moon-line" id="moon-icon" style="display: none"></span>
+      </a>
+    </div>
+  </nav>
+</header>
+
+    <main class="container">
+      
+
+  <div class="post-toc">
+  <div class="tocbot-list">
+  </div>
+  <div class="tocbot-list-menu">
+    <a class="tocbot-toc-expand" onclick="expand_toc()">Expand all</a>
+    <a onclick="go_top()">Back to top</a>
+    <a onclick="go_bottom()">Go to bottom</a>
+  </div>
+</div>
+
+
+
+<div class="post">
+  <div class="post-header">
+    <h1 class="post-title">浅谈Webshell攻防技术的发展</h1>
+    <p class="post-meta">2022-10-02 22:16:24</p>
+  </div>
+  <div class="post-content">
+    <article>
+      <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>本篇文章记录了一些笔者对Webshell文件的绕过手段与检测思路发展的理解，仅代表笔者本人的一得之见，在此抛砖引玉。</p>
+<h2 id="背景"><a href="#背景" class="headerlink" title="背景"></a>背景</h2><p>Webshell是一种以PHP、JSP、ASP等网页文件形式存在的代码执行环境。最初的Webshell是一种用于管理网站服务器的便捷工具，随着Web业务的发展，Webshell作为一类牺牲安全性以换来便捷性的管理工具逐渐消亡，却以一种木马后门的形式存活了下来，并以其便捷、隐蔽和万能的特点，成为了攻击者们手中的渗透利器。</p>
+<p>对于黑客而言，在渗透过程中，Webshell可以作为一种写入或上传的攻击手段。在打入服务器后，Webshell又可以作为一种维持长久访问权限的控制器。对于网站管理者来说，未被发现的Webshell就像一颗埋藏在服务器内的遥控炸弹，何时引爆完全取决于攻击者的想法。因此，如何尽早发现Webshell，将威胁控制在较早阶段，成为了网络安全方向的一大课题。</p>
+<p>在Webshell检测课题中，检测对象可以分成Webshell文件检测和Webshell通信流量检测，本文介绍的是Webshell文件的检测发展和检测思路。</p>
+<h2 id="从规则出发"><a href="#从规则出发" class="headerlink" title="从规则出发"></a>从规则出发</h2><p>最初作为渗透工具的Webshell，可以按照长度和功能划分为一句话、小马和大马。</p>
+<p>一句话，顾名思义就是通过一行代码实现的Webshell。这类Webshell通常只实现了一个命令执行或文件写入的功能。以PHP的常见一句话为例，这条Webshell只有30个字符，但实现了获取外部输入、执行命令和回显三个动作。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;?php echo exec($_GET[&#x27;cmd&#x27;]);</span><br></pre></td></tr></table></figure>
+<p>而小马和大马则分别是一句话的具体实现和多种功能集成的超级Webshell。</p>
+<p>像一句话这种简单Webshell的特征非常明显，安全厂商通过规则基本就可以实现拦截。以上面的PHP一句话为例，只需要编写一条正则表达式，即可实现检测。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">\&lt;\?php[\s\S]exec[\s\S]\([\s\S]($_GET)|($_POST)[\s\S]\)</span><br></pre></td></tr></table></figure>
+
+<p>规则检测简单有效，性能优异，因此被应用在许多安全产品上，例如D盾、安全狗等常见的Webshell检测工具均集成了规则检测能力。但规则检测也存在着误报率高、易被绕过等缺点，能绕过规则检测的方法有很多，例如：</p>
+<p>回调</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;?php @call_user_func(assert,$_GET[&#x27;cmd&#x27;]);</span><br></pre></td></tr></table></figure>
+<p>拼接</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&lt;?php $a = &quot;ex&quot; + &quot;ec&quot;;</span><br><span class="line">$b = $_GET[&#x27;cmd&#x27;];</span><br><span class="line">$a($b);</span><br></pre></td></tr></table></figure>
+<p>JSP的编码</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;%\u0050\u0072\u006f\u0063\u0065\u0073\u0073\u0042\u0075\u0069\u006c\u0064\u0065\u0072\u002e\u0073\u0074\u0061\u0072\u0074\u0028\u0072\u0065\u0071\u0075\u0065\u0073\u0074\u002e\u0067\u0065\u0074\u0050\u0061\u0072\u0061\u006d\u0065\u0074\u0065\u0072\u0028\u0022\u0063\u006d\u0064\u0022\u0029\u0029\u003b%&gt;</span><br></pre></td></tr></table></figure>
+<p>JSP的反射</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">&lt;% Class clazz = Class.forName(&quot;java.lang.Runtime&quot;);</span><br><span class="line">Method gr = clazz.getMethod(&quot;getRuntime&quot;);</span><br><span class="line">Runtime obj = (Runtime) gr.invoke(null, new Object[]&#123;&#125;);</span><br><span class="line">Method e = clazz.getMethod(&quot;exec&quot;, String.class);</span><br><span class="line">e.invoke(obj, request.getPatameter(&quot;cmd&quot;));%&gt;</span><br></pre></td></tr></table></figure>
+<p>等等，此处不再一一列举。如果单依赖规则检测Webshell，很难平衡好高检出、低误报和抗绕过的关系。</p>
+<p>那么，有没有什么检测技术是可以同时具备高检出和低误报两个特点的呢？</p>
+<h2 id="初探静态分析"><a href="#初探静态分析" class="headerlink" title="初探静态分析"></a>初探静态分析</h2><p>为什么规则检测存在误报率高和抗绕过差的问题？笔者认为本质上是因为规则提取的信息只有文本信息，文本信息的获取是很容易被干扰的。</p>
+<p>如何提取更多的信息以供检测呢？不妨参考程序静态分析技术。程序静态分析是在不运行代码的情况下，通过词法分析、语法分析、控制流分析、数据流分析等方式对代码进行分析，检验代码的安全性和可靠性。</p>
+<p>程序静态分析通常被用作检测程序内部的缺陷或验证是否存在被外部利用的风险。如果换个角度看Webshell检测问题，会发现它和程序静态分析要解决的问题非常相似。因此，从这里开始，下面的许多Webshell检测手段都有参考程序静态分析的解决思路</p>
+<h3 id="污点分析"><a href="#污点分析" class="headerlink" title="污点分析"></a>污点分析</h3><p>在程序静态分析中，有一种基础的分析方法是污点分析。污点分析可以抽象成三元组&lt;Sources, Sinks, Sanitizers&gt;的形式。其中Source是污点源，表示从此源点引入了无法确定的数据到系统中；Sink是污点汇聚点，表示出现安全敏感操作或者泄露隐私数据到外界；Sanitizer是无害化处理，表示通过约束使数据传播不再对系统的信息安全产生危害。污点分析就是分析程序中由污点源引入的数据是否能够不经无害化处理，而直接传播到污点汇聚点。如果不能，说明系统是信息流安全的，否则，说明系统产生了隐私数据泄露或危险数据操作等安全问题。</p>
+<p>污点分析很通俗易懂，通过污点扩散的形式，确定污点数据能否接触到危险点，从而确定程序中是否存在漏洞，以及哪里存在漏洞。这个思路也可以应用到Webshell检测上：Source表示外部输入源或经过混淆加密的不受信任的数据；Sink表示可以执行危险动作的危险函数；Sanitizer表示对未知数据制定的约束。通过污点传播，我们就可以确定某个文件中是否存在外部输入源不经过约束接触到危险函数的场景。这些场景基本都可以判定为Webshell，即使不是Webshell，也存在被利用的风险。</p>
+<p>如何进行污点分析呢？通过数据流分析即可实现。数据流分析从程序代码中收集程序的语义信息，并确定变量的定义和使用，例如变量赋值操作。在这里，我们不需要确定变量的值具体是什么，只需要确定变量是否被外部输入污染即可。</p>
+<p>如何进行数据流分析呢？利用语法分析构建语法树，在语法树上进行数据流分析。</p>
+<p>以下面的JSP一句话为例：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&lt;%ProcessBuilder.start(request.getParameter(&quot;cmd&quot;));%&gt;</span><br></pre></td></tr></table></figure>
+<p>对此Webshell生成的部分抽象语法树可以如下图表示：<br><img src="/2022/10/02/%E6%B5%85%E8%B0%88Webshell%E6%94%BB%E9%98%B2%E6%8A%80%E6%9C%AF%E7%9A%84%E5%8F%91%E5%B1%95/1.png"></p>
+<p>此图可以很好地解释污点分析的检测思路，在一条语句中，利用污点分析很容易解决大部分常见的绕过规则的手段。</p>
+<p>那如果分成多条语句以后，污点分析是否就没有效果了呢？稍加修改，改为以下的Webshell：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&lt;%String command = request.getParameter(&quot;cmd&quot;);</span><br><span class="line">ProcessBuilder.start(command);%&gt;</span><br></pre></td></tr></table></figure>
+<p>以变量作为数据的载体，实现语句间的数据传递。但这种语句间的数据流分析更简单，只需要简单模拟变量的获取和修改即可。</p>
+<p>污点分析的检出能力和抗绕过能力相较于规则检出要高很多。在性能方面，污点分析也拥有不逊于规则检出的优秀性能。以污点分析为主，搭配规则进行检出，已经可以形成一套成熟的Webshell检测体系了。许多比较优秀的Webshell检测引擎的介绍中，也都会出现类似的组合，例如阿里的伏魔引擎、腾讯的TAV引擎、深信服的WebshellKiller都有类似的技术。</p>
+<p>虽然污点分析+规则的组合已经可以解决99%的常见Webshell，但从攻击者的角度思考，污点分析并不是什么固若金汤的盾，也存在致命的弱点。从上文的介绍中可以发现，污点分析主要依赖于数据流分析，而数据流分析需要依赖控制流分析，因此，利用控制流就可以轻松绕过污点分析。</p>
+<p>控制流可以通俗地理解为程序执行语句的顺序，默认是自上至下依次运行，那有没有什么方法可以改变这种顺序呢？有很多，例如函数调用、goto语句、if语句等。利用这些方式修改控制流，就可以让污点分析失效。这种混淆手段的学术名词叫做控制流平坦化，还是以上面的Webshell为例，经过简单的控制流平坦化后的Webshell如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">&lt;%String command = &quot;&quot;;</span><br><span class="line">for(int i = 0; i &lt; 2; i++)&#123;</span><br><span class="line">  if(i == 1)</span><br><span class="line">    ProcessBuilder.start(command);</span><br><span class="line">  else</span><br><span class="line">    command = request.getParameter(&quot;cmd&quot;);</span><br><span class="line">&#125;%&gt;</span><br></pre></td></tr></table></figure>
+
+<p>对此，防守方是否可以应对呢？可以考虑拉平控制流，先将程序执行语句的顺序确定下来，再进行污点分析。但拉平控制流并不容易，例如上面的经过混淆后的Webshell的控制流是受数据影响的，因此不仅需要存储污点，还需要存储数据值。需要存储数据值来确定控制流，确定控制流是为了确定数据流，确定数据流仅仅是为了污点分析吗？</p>
+<h3 id="虚拟执行"><a href="#虚拟执行" class="headerlink" title="虚拟执行"></a>虚拟执行</h3><p>在得到了数据值、控制流和数据流后，如果仅用于污点分析，不免有些大材小用，确定了这三者，完全可以模拟程序的运行过程。用数据值替换污点在语句间传递，基本就能得到想要的所有信息了。比如出现函数调用，污点分析只是获取了函数名和函数参数上的污点，而虚拟执行却能获取到函数参数的值。如果能实现到这一步，笔者认为对于防守方来说就足够了。</p>
+<p>对于虚拟执行，攻击方仍存在一些绕过的手段。虽然虚拟执行模拟了程序的运行，但毕竟无法模拟到和实际运行情况一模一样的程度。通过一些诸如Rand函数、Time函数、获取文件名或获取本地环境信息的操作，仍可以尝试绕过虚拟执行。此外，虽然虚拟执行存储了数据值，但虚拟执行又如何确定外部输入的值呢？再对上面的Webshell做如下修改：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">&lt;%String command = &quot;&quot;;</span><br><span class="line">int index = request.getParameter(&quot;index&quot;);</span><br><span class="line">for(int i = 0; i &lt; 2; i++)&#123;</span><br><span class="line">  if(i == index)</span><br><span class="line">    ProcessBuilder.start(command);</span><br><span class="line">  else</span><br><span class="line">    command = request.getParameter(&quot;cmd&quot;);</span><br><span class="line">&#125;%&gt;</span><br></pre></td></tr></table></figure>
+
+<p>当外部输入的index为1时，这是一个可以执行的Webshell，但当外部输入的index不为1时，这个程序看起来没有任何危险，虚拟执行又该如何解决呢？</p>
+<h3 id="符号执行"><a href="#符号执行" class="headerlink" title="符号执行"></a>符号执行</h3><p>笔者对符号执行的了解并不深入，这里只做简单介绍。</p>
+<p>在污点分析中我们遇到了这样一个问题：如何确定程序执行语句的顺序？在虚拟执行中，我们尝试用数据值去解，但这个解只能解决一部分问题。</p>
+<p>当程序中不存在外部输入时，可以确定程序只会存在一条执行路径。但如果程序中存在外部输入，程序就可能根据不同的外部输入执行多条路径。如何确定静态分析的过程中能够覆盖所有程序可能执行的路径呢？目前看有两个思路：1.通过遍历所有外部输入获取所有路径，这个方案很难实现。2.用符号值代替外部输入，表示一个范围的输入，从理论上覆盖所有路径。这就是符号执行。</p>
+<p>符号执行是一种比较新的程序静态分析技术，因此也可以尝试应用到Webshell检测的场景上。符号执行，顾名思义就是程序的符号化执行，与之相对的虚拟执行则是程序的数据化执行。还是以上面的Webshell为例，虚拟执行只能确定i是外部输入，但不能确定是什么，因此也就无法确定程序的控制流和数据流，从而影响到检测结果。而符号执行会对外部输入做一些约束，假设index&gt;0、index&#x3D;0或index&lt;0，程序会发生什么，并继续收紧约束。理想情况下我们可以确定当index&#x3D;1时，是Webshell。</p>
+<p>由于笔者本人没有尝试过用符号执行解决Webshell检测问题，所以对于符号执行存在的问题，笔者知之甚少。不过可以确定的是，如果符号执行想要达到虚拟执行的效果，那么性能开销一定会比虚拟执行高出许多。从能耗比的角度来看，符号执行并不是一个好的选择。</p>
+<h2 id="沙箱"><a href="#沙箱" class="headerlink" title="沙箱"></a>沙箱</h2><p>聊完了静态分析，接下来就是动态分析，动态分析在Webshell检测中通常以沙箱的形式存在。沙箱是一个类似于沙盒的虚拟环境，允许检测对象在虚拟环境中执行一些行为，并在这个过程中判断是否是Webshell。</p>
+<p>虽然沙箱真实搭建了一个可执行环境，但仍需要提供Webshell对应的外部输入才能实现检测目的。那么沙箱也需要面对符号执行面对的问题，如何确定程序的外部输入？显然，沙箱无法完全解决这个问题。比如许多黑客的Webshell都喜欢带上一个password用来启动，沙箱如何确定这种password？</p>
+<p>对于Webshell检测来说，沙箱并不是一个很好的选择。性能差、检出能力一般，局限性大，存在版本兼容性问题，还会引入安全风险等等。沙箱就没有任何可取之处了吗？也不尽然。笔者认为，沙箱的抗绕过能力是这些检测方法中最强的一种。在Webshell攻防技术发展的未来，沙箱或许能成为一种抗绕过的盾牌。</p>
+<h2 id="机器学习检测"><a href="#机器学习检测" class="headerlink" title="机器学习检测"></a>机器学习检测</h2><p>最后聊聊机器学习检测。笔者认为机器学习检测</p>
+<p>机器学习检测的效果看起来很好，只要训练好模型，对于常见的Webshell基本可以说是通杀，对于一些混淆较强的Webshell也具备一定检出能力，从而给人一种检测能力已经足够的错觉。实际上，机器学习检测的抗绕过能力和规则检测基本是一个水平。但在可解释性和精细化方面，机器学习检测相比规则检测简直是被完爆，经常会有很多无法解释的误报。不知道为什么检出，效果看似不错，实际千疮百孔，这就是笔者对机器学习检测的看法。</p>
+<p>如何绕过机器学习检测？在网上随便找一段业务量较大的代码，稍微修改下逻辑，不让代码跑入即可，然后在某个位置插入一句话，90%的机器学习都会直接判白。再比如通过类、函数等形式改造一下Webshell，再将变量名等文本特征美化一下，也能轻松绕过机器学习。</p>
+
+    </article>
+  </div>
+  <div class="post-footer">
+  </div>
+  <div class="post-license">
+    <span>
+      <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" style="color: inherit;">
+        CC BY-NC-SA 4.0
+      </a>
+      2021-PRESENT © John Doe
+    </span>
+    <div></div>
+  </div>
+  <div class="post-comment">
+    <div id="disqusjs"></div>
+  </div>
+</div>
+
+    </main>
+    <footer class="footer">
+  <div class="copyright">
+    <span>Powered by <a href="https://hexo.io" target="_blank">Hexo</a> & <a href="https://github.com/xbmlz/hexo-theme-maple" target="_blank">Maple</a></span>
+  </div>
+</footer>
+
+  </div>
+  <script>
+  (function() {
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+    const setting = localStorage.getItem('hexo-color-scheme') || 'auto'
+    if (setting === 'dark' || (prefersDark && setting !== 'light'))
+      document.documentElement.classList.toggle('dark', true)
+  })()
+</script>
+
+
+<script src="/js/jquery-3.4.1.min.js"></script>
+
+
+<script src="/js/index.js"></script>
+
+
+
+<script src="/js/iconify.min.js"></script>
+
+
+<script>
+  window.onload = () => {
+    let media = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)')
+    let isDark = () => {
+      const setting = localStorage.getItem('hexo-color-scheme') || 'auto'
+      if (setting === 'dark' || (media.matches && setting !== 'light')) {
+        return true
+      } else{
+        return false
+      }
+    }
+    // 切换为深色模式
+    let toggleDarkMode = () => {
+      document.documentElement.classList.toggle('dark', true)
+      document.getElementById('moon-icon').style.display = 'block'
+      document.getElementById('sun-icon').style.display = 'none'
+      setDarkMode('dark')
+    }
+    // 切换为浅色模式
+    let toggleLightMode = () => {
+      document.documentElement.classList.toggle('dark', false)
+      document.getElementById('moon-icon').style.display = 'none'
+      document.getElementById('sun-icon').style.display = 'block'
+      setDarkMode('light')
+    }
+    let setDarkMode = (scheme) => {
+      const darkMode = media.matches ? 'dark' : 'light'
+      if (darkMode !== scheme) {
+        localStorage.setItem('hexo-color-scheme', scheme)
+      } else{
+        localStorage.setItem('hexo-color-scheme', 'auto')
+      }
+    }
+    // 切换为自动模式
+    let updateMode = (e) => {
+      const setting = localStorage.getItem('hexo-color-scheme') || 'auto'
+      console.log(setting, e.matches)
+      if (setting === 'auto') {
+        if (e.matches) {
+          toggleDarkMode()
+        } else {
+          toggleLightMode()
+        }
+      }
+    }
+
+    // let media = getMedia()
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', updateMode)
+    } else if (typeof media.addListener === 'function') {
+      media.addListener(updateMode)
+    }
+
+    if (isDark()) {
+      document.getElementById('moon-icon').style.display = 'block'
+    } else {
+      document.getElementById('sun-icon').style.display = 'block'
+    }
+
+    document.getElementById('moon-icon').addEventListener('click', () => {
+      toggleLightMode()
+    })
+    document.getElementById('sun-icon').addEventListener('click', () => {
+      toggleDarkMode()
+    })
+  }
+</script>
+
+
+
+<script src="/lib/tocbot/tocbot.min.js"></script>
+
+<script>
+  var tocbot_timer;
+  var DEPTH_MAX = 6; // 为 6 时展开所有
+  var tocbot_default_config = {
+    tocSelector: '.tocbot-list',
+    contentSelector: '.post-content',
+    headingSelector: 'h1, h2, h3, h4, h5',
+    orderedList: false,
+    scrollSmooth: true,
+    onClick: extend_click,
+  };
+  function extend_click() {
+    clearTimeout(tocbot_timer);
+    tocbot_timer = setTimeout(function () {
+      tocbot.refresh(obj_merge(tocbot_default_config, {
+        hasInnerContainers: true
+      }));
+    }, 420); // 这个值是由 tocbot 源码里定义的 scrollSmoothDuration 得来的
+  }
+  function expand_toc() {
+    var b = document.querySelector('.tocbot-toc-expand');
+    var expanded = b.getAttribute('data-expanded');
+    expanded ? b.removeAttribute('data-expanded') : b.setAttribute('data-expanded', true);
+    tocbot.refresh(obj_merge(tocbot_default_config, {
+      collapseDepth: expanded ? 1 : DEPTH_MAX
+    }));
+    b.innerText = expanded ? 'Expand all' : 'Collapse all';
+  }
+  function go_top() {
+    window.scrollTo(0, 0);
+  }
+  function go_bottom() {
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+  function obj_merge(target, source) {
+    for (var item in source) {
+      if (source.hasOwnProperty(item)) {
+        target[item] = source[item];
+      }
+    }
+    return target;
+  }
+  $(document).ready(() => {
+    tocbot.init(obj_merge(tocbot_default_config, {
+      collapseDepth: 1
+    }));
+  });
+</script>
+
+
+
+
+
+
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@2/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Config({
+    "HTML-CSS": {
+        preferredFont: "TeX",
+        availableFonts: ["STIX","TeX"],
+        linebreaks: { automatic:true },
+        EqnChunk: (MathJax.Hub.Browser.isMobile ? 10 : 50)
+    },
+    tex2jax: {
+        inlineMath: [ ["$", "$"], ["\\(","\\)"] ],
+        processEscapes: true,
+        ignoreClass: "tex2jax_ignore|dno",
+        skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+    },
+    TeX: {
+        equationNumbers: { autoNumber: "AMS" },
+        noUndefined: { attributes: { mathcolor: "red", mathbackground: "#FFEEEE", mathsize: "90%" } },
+        Macros: { href: "{}" }
+    },
+    messageStyle: "none"
+  });
+</script>
+<script type="text/x-mathjax-config">
+  MathJax.Hub.Queue(function() {
+      var all = MathJax.Hub.getAllJax(), i;
+      for (i=0; i < all.length; i += 1) {
+          all[i].SourceElement().parentNode.className += ' has-jax';
+      }
+  });
+</script>
+
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>
+  $(document).ready(() => {
+    const maraidConfig = {
+      theme: "default",
+      logLevel: 3,
+      flowchart: { curve: "linear" },
+      gantt: { axisFormat: "%m/%d/%Y" },
+      sequence: { actorMargin: 50 },
+    };
+    mermaid.initialize(maraidConfig);
+  });
+</script>
+
+
+
+
+<script src="/lib/fancybox/fancybox.umd.js"></script>
+
+<script>
+  $(document).ready(() => {
+    $('.post-content').each(function(i){
+      $(this).find('img').each(function(){
+        if ($(this).parent().hasClass('fancybox') || $(this).parent().is('a')) return;
+        var alt = this.alt;
+        if (alt) $(this).after('<span class="fancybox-alt">' + alt + '</span>');
+        $(this).wrap('<a class="fancybox-img" href="' + this.src + '" data-fancybox=\"gallery\" data-caption="' + alt + '"></a>')
+      });
+      $(this).find('.fancybox').each(function(){
+        $(this).attr('rel', 'article' + i);
+      });
+    });
+
+    Fancybox.bind('[data-fancybox="gallery"]', {
+        // options
+    })
+  })
+</script>
+
+
+
+</body>
+
+</html>
